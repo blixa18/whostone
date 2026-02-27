@@ -333,12 +333,19 @@ io.on('connection', socket => {
     const plat   = sess.platform || null;
     const tracks = sess.tracks   || [];
 
-    // Avoid duplicate socket
+    // Avoid duplicate socket — reconnect existing player and update platform
     const existing = room.players.find(p => p.sessionId === sessionId);
     if (existing) {
       existing.socketId = socket.id;
+      // Update platform and tracks if we now have them (returning from OAuth)
+      if (plat && !existing.platform) {
+        existing.platform = plat;
+        existing.tracks   = tracks;
+      }
       socket.join(code);
-      socket.emit('joined', { playerId: existing.id, room: sanitizeRoom(room) });
+      socket.emit('joined', { playerId: existing.id, isHost: existing.isHost||false, room: sanitizeRoom(room) });
+      // Notify others that this player is now connected
+      socket.to(code).emit('player-joined', { player: sanitizePlayer(existing), room: sanitizeRoom(room) });
       return;
     }
 
