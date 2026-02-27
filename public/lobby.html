@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhosTune — Lobby</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'><text y='32' font-size='32'>🎵</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Syne+Mono&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="orbs"><div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div></div>
+<div id="toast"></div>
+
+<div class="screen active" id="s-lobby">
+  <div class="lobby-top">
+    <div class="room-badge">
+      <span class="label">Salle</span>
+      <span class="room-code" id="lob-code">----</span>
+      <button class="icon-btn" onclick="copyCode()" title="Copier le code">
+        <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+          <rect x="5" y="5" width="9" height="9" rx="2" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M3 10V3a2 2 0 012-2h7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+    <div class="lobby-title">Salle d'attente</div>
+    <div class="lobby-hint" id="lob-hint">Connecte ta musique pour rejoindre la partie</div>
+  </div>
+
+  <div class="lobby-grid">
+    <!-- Players -->
+    <div class="players-panel card">
+      <div class="panel-head">
+        <span class="label">Joueurs</span>
+        <span class="label" id="lob-count" style="color:var(--y)">0 / 8</span>
+      </div>
+      <div class="players-list" id="lob-players">
+        <div class="empty-slot">Chargement…</div>
+      </div>
+    </div>
+
+    <!-- Settings + connect -->
+    <div class="right-panel card">
+      <div id="settings-block">
+        <div class="label" style="margin-bottom:14px">Paramètres</div>
+        <div class="setting-row" style="margin-bottom:16px">
+          <div class="label">Questions</div>
+          <div class="range-wrap">
+            <input type="range" id="r-q" min="5" max="20" step="5" value="10"
+                   oninput="onSettingChange()">
+            <div class="range-val" id="v-q">10</div>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="label">Secondes</div>
+          <div class="range-wrap">
+            <input type="range" id="r-t" min="15" max="45" step="5" value="20"
+                   oninput="onSettingChange()">
+            <div class="range-val" id="v-t">20s</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="connect-zone">
+        <div class="label" style="margin-bottom:8px">Ta musique</div>
+        <div id="connect-btns-wrap">
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px">
+            Connecte Spotify ou Deezer pour que tes musiques entrent dans le jeu.
+          </p>
+          <button class="btn btn-spotify" style="width:100%;margin-bottom:8px" onclick="connectSpotify()">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+            Connecter Spotify
+          </button>
+          <button class="btn btn-deezer" style="width:100%" onclick="connectDeezer()">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M18.81 4.16v3.03H24V4.16h-5.19zm-6.46 0v3.03h5.19V4.16h-5.19zM6.27 4.16v3.03h5.19V4.16H6.27zm12.54 3.25v3.03H24V7.41h-5.19zm-6.46 0v3.03h5.19V7.41h-5.19zm-6.08 0v3.03h5.19V7.41H6.27zm12.54 3.25v3.02H24v-3.02h-5.19zm-6.46 0v3.02h5.19v-3.02h-5.19zm-6.08 0v3.02h5.19v-3.02H6.27zM.08 13.91v3.02h5.19v-3.02H.08zm6.19 0v3.02h5.19v-3.02H6.27zm6.08 0v3.02h5.19v-3.02h-5.19zm6.46 0v3.02H24v-3.02h-5.19zm-18.73 3.25v3.02h5.19v-3.02H.08zm6.19 0v3.02h5.19v-3.02H6.27zm6.08 0v3.02h5.19v-3.02h-5.19zm6.46 0v3.02H24v-3.02h-5.19z"/></svg>
+            Connecter Deezer
+          </button>
+        </div>
+        <div id="connected-badge-wrap" style="display:none"></div>
+      </div>
+
+      <button class="btn btn-yellow" id="start-btn" style="width:100%" disabled onclick="startGame()">
+        ▶ Lancer la partie
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const params    = new URLSearchParams(location.search);
+const ROOM      = (params.get('room') || '').toUpperCase();
+const SID       = params.get('sid') || '';
+const STATUS    = params.get('status') || '';
+const PLAYER_NAME = sessionStorage.getItem('playerName') || 'Joueur';
+const IS_HOST   = sessionStorage.getItem('isHost') === '1';
+const LETTERS   = ['A','B','C','D'];
+
+let myPlayerId  = null;
+let isHost      = false;
+let roomPlayers = [];
+let roomSettings = { questions:10, timer:20 };
+
+if (!ROOM) { location.href = '/'; }
+
+// ── Socket ──
+const socket = io();
+
+socket.on('connect', () => {
+  socket.emit('join-room', {
+    roomCode:    ROOM,
+    sessionId:   SID || socket.id,
+    playerName:  PLAYER_NAME,
+    playerEmoji: null // server picks from session
+  });
+});
+
+socket.on('joined', ({ playerId, isHost: iH, room }) => {
+  myPlayerId = playerId;
+  isHost     = iH;
+  applyRoom(room);
+  document.getElementById('lob-code').textContent = ROOM;
+
+  // If we came back from OAuth, show connected badge
+  if (STATUS === 'connected') {
+    const me = room.players.find(p => p.id === playerId);
+    if (me?.platform) showConnectedBadge(me.platform);
+  }
+
+  if (!isHost) {
+    document.getElementById('settings-block').style.opacity = '.5';
+    document.getElementById('settings-block').style.pointerEvents = 'none';
+    document.getElementById('start-btn').style.display = 'none';
+  }
+});
+
+socket.on('player-joined', ({ room }) => {
+  applyRoom(room);
+  toast('🎉 Un joueur a rejoint !');
+});
+socket.on('player-left', ({ room }) => {
+  applyRoom(room);
+  toast('👋 Un joueur est parti');
+});
+socket.on('settings-updated', s => {
+  roomSettings = s;
+  document.getElementById('r-q').value = s.questions;
+  document.getElementById('v-q').textContent = s.questions;
+  document.getElementById('r-t').value = s.timer;
+  document.getElementById('v-t').textContent = s.timer+'s';
+});
+socket.on('new-host', ({ playerId }) => {
+  if (playerId === myPlayerId) {
+    isHost = true;
+    document.getElementById('settings-block').style.opacity = '';
+    document.getElementById('settings-block').style.pointerEvents = '';
+    document.getElementById('start-btn').style.display = '';
+    toast('👑 Tu es maintenant l\'hôte !');
+  }
+});
+socket.on('game-started', data => {
+  sessionStorage.setItem('gameData', JSON.stringify(data));
+  sessionStorage.setItem('myPlayerId', myPlayerId);
+  sessionStorage.setItem('roomCode', ROOM);
+  location.href = '/game.html';
+});
+socket.on('error', ({ message }) => {
+  toast('⚠️ ' + message);
+});
+
+// ── Room render ──
+function applyRoom(room) {
+  roomPlayers  = room.players;
+  roomSettings = room.settings;
+  document.getElementById('lob-count').textContent = `${room.players.length} / 8`;
+  document.getElementById('r-q').value = room.settings.questions;
+  document.getElementById('v-q').textContent = room.settings.questions;
+  document.getElementById('r-t').value = room.settings.timer;
+  document.getElementById('v-t').textContent = room.settings.timer+'s';
+  renderPlayers(room.players);
+  checkStart(room.players);
+}
+
+function renderPlayers(players) {
+  const list = document.getElementById('lob-players');
+  list.innerHTML = '';
+  players.forEach((p, idx) => {
+    const isMe   = p.id === myPlayerId;
+    const plCls  = p.platform === 'spotify' ? 'sp' : p.platform === 'deezer' ? 'dz' : '';
+    const stHtml = p.platform
+      ? `<div class="p-state ok-${p.platform}">✓ ${p.platform==='spotify'?'Spotify':'Deezer'} connecté</div>`
+      : `<div class="p-state waiting">En attente…</div>`;
+    const row = document.createElement('div');
+    row.className = `player-row ${isMe?'me':''} ${plCls}`;
+    row.style.animationDelay = (idx*.05)+'s';
+    row.innerHTML = `
+      <div class="p-avi">${p.emoji||'🎵'}</div>
+      <div class="p-info">
+        <div class="p-name">${p.name}${isMe?'<span style="color:var(--y);font-size:11px;margin-left:6px">(moi)</span>':''}</div>
+        ${stHtml}
+      </div>
+      ${p.isHost?'<span class="p-crown">👑</span>':''}`;
+    list.appendChild(row);
+  });
+  const empty = Math.min(4, 8 - players.length);
+  for (let i=0; i<empty; i++) {
+    const s = document.createElement('div');
+    s.className = 'empty-slot';
+    s.innerHTML = '<span style="opacity:.3">+</span> Slot libre';
+    list.appendChild(s);
+  }
+}
+
+function checkStart(players) {
+  const btn  = document.getElementById('start-btn');
+  const me   = players.find(p => p.id === myPlayerId);
+  const conn = players.filter(p => p.platform);
+  const ok   = isHost && conn.length >= 2 && me?.platform;
+  btn.disabled = !ok;
+  btn.textContent = ok
+    ? `▶ Lancer — ${conn.length} joueurs prêts`
+    : me?.platform
+      ? `▶ Lancer (${conn.length}/2 min. connectés)`
+      : '▶ Connecte ta musique d\'abord';
+}
+
+// ── Settings (host) ──
+function onSettingChange() {
+  const q = +document.getElementById('r-q').value;
+  const t = +document.getElementById('r-t').value;
+  document.getElementById('v-q').textContent = q;
+  document.getElementById('v-t').textContent = t+'s';
+  socket.emit('update-settings', { roomCode: ROOM, settings: { questions:q, timer:t } });
+}
+
+// ── Connect platform ──
+async function connectSpotify() {
+  await ensureRoomOnServer();
+  location.href = `/auth/spotify?roomCode=${ROOM}&playerName=${encodeURIComponent(PLAYER_NAME)}`;
+}
+async function connectDeezer() {
+  await ensureRoomOnServer();
+  location.href = `/auth/deezer?roomCode=${ROOM}&playerName=${encodeURIComponent(PLAYER_NAME)}`;
+}
+async function ensureRoomOnServer() {
+  try {
+    const check = await fetch(`/api/room/${ROOM}`);
+    if (check.status === 404) {
+      await fetch('/api/room/create', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ forceCode: ROOM, settings: { questions:10, timer:20 } })
+      });
+    }
+  } catch(e) { console.warn('ensureRoom failed', e); }
+}
+
+function showConnectedBadge(platform) {
+  document.getElementById('connect-btns-wrap').style.display = 'none';
+  const wrap = document.getElementById('connected-badge-wrap');
+  wrap.style.display = '';
+  const cls  = platform === 'spotify' ? 'sp' : 'dz';
+  const name = platform === 'spotify' ? 'Spotify' : 'Deezer';
+  wrap.innerHTML = `
+    <div class="connected-ok ${cls}">
+      <span style="font-size:20px">${platform==='spotify'?'🟢':'🟣'}</span>
+      <div>
+        <div>${name} connecté !</div>
+        <div class="tracks-count" id="tracks-count">Récupération des titres…</div>
+      </div>
+    </div>`;
+  // Update track count from room data
+  setTimeout(() => {
+    const me = roomPlayers.find(p => p.id === myPlayerId);
+    const el = document.getElementById('tracks-count');
+    if (el) el.textContent = me ? 'Titres prêts ✓' : 'Titres récupérés ✓';
+  }, 1500);
+}
+
+// ── Start game ──
+function startGame() {
+  socket.emit('start-game', { roomCode: ROOM });
+}
+
+// ── Copy code ──
+function copyCode() {
+  navigator.clipboard?.writeText(ROOM).catch(()=>{});
+  toast('📋 Code copié !');
+}
+
+// ── Toast ──
+let _t;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(_t); _t = setTimeout(() => el.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>

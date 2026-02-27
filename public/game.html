@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhosTune — En jeu</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'><text y='32' font-size='32'>🎵</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Syne+Mono&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="orbs"><div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div></div>
+<div id="toast"></div>
+
+<!-- QUIZ SCREEN -->
+<div class="screen active" id="s-quiz">
+  <div class="quiz-wrap">
+    <!-- Top bar -->
+    <div class="qbar">
+      <div class="qbar-left">
+        <div class="q-progress-bar"><div class="q-progress-fill" id="q-pfill" style="width:0"></div></div>
+        <div class="q-counter"><b id="q-curr">1</b> / <span id="q-tot">10</span></div>
+      </div>
+      <div class="q-timer">
+        <svg width="44" height="44" viewBox="0 0 44 44">
+          <circle class="tc-bg" cx="22" cy="22" r="18"/>
+          <circle class="tc-fg" id="tc-fg" cx="22" cy="22" r="18"
+            stroke-dasharray="113.1" stroke-dashoffset="0"/>
+        </svg>
+        <span class="q-timer-num" id="t-num">—</span>
+      </div>
+      <div class="qbar-right" id="score-chips"></div>
+    </div>
+
+    <!-- Body -->
+    <div class="quiz-body">
+      <!-- Vinyl + waveform -->
+      <div>
+        <div style="display:flex;align-items:center;justify-content:center">
+          <div class="vinyl stopped" id="vinyl"></div>
+        </div>
+        <div class="waveform quiet" id="waveform"></div>
+
+        <!-- Hidden audio element -->
+        <audio id="audio-el" preload="auto" style="display:none"></audio>
+
+        <!-- Fallback: no preview available -->
+        <div id="no-preview" style="display:none;text-align:center;color:var(--muted);font-size:13px;margin-top:8px">
+          ⚠️ Pas de preview disponible pour ce titre
+        </div>
+      </div>
+
+      <!-- Song info revealed after answer -->
+      <div class="song-info" id="song-info">
+        <div class="song-title"  id="song-title"></div>
+        <div class="song-artist" id="song-artist"></div>
+      </div>
+
+      <div class="q-text">À qui appartient <em>cette musique</em>&nbsp;?</div>
+
+      <div class="ans-grid" id="ans-grid"></div>
+
+      <div class="answered-info" id="answered-info"></div>
+    </div>
+  </div>
+</div>
+
+<!-- RESULTS SCREEN -->
+<div class="screen" id="s-results">
+  <div class="results-hero">
+    <div class="results-title">FIN&nbsp;!</div>
+    <div class="results-winner" id="res-winner"></div>
+  </div>
+  <div class="podium" id="podium"></div>
+  <div class="scoreboard card" id="scoreboard"></div>
+  <div class="res-btns">
+    <button class="btn btn-yellow btn-lg" onclick="backToLobby()">🔁 Rejouer</button>
+    <button class="btn btn-ghost btn-lg" onclick="location.href='/'">🏠 Accueil</button>
+  </div>
+</div>
+
+<!-- REVEAL MODAL -->
+<div class="modal-bg" id="modal">
+  <div class="reveal-card">
+    <div class="rv-icon"    id="rv-icon">🎉</div>
+    <div class="rv-verdict" id="rv-verdict">BONNE RÉPONSE !</div>
+    <div style="height:14px"></div>
+    <div class="rv-song-title"  id="rv-song-title"></div>
+    <div class="rv-song-artist" id="rv-song-artist"></div>
+    <div class="rv-owner-row">
+      <div class="rv-owner-avi"  id="rv-avi"></div>
+      <div>
+        <div class="rv-owner-label">Cette musique appartient à</div>
+        <div class="rv-owner-name" id="rv-owner-name"></div>
+      </div>
+    </div>
+    <div class="rv-points" id="rv-pts"><span>⭐</span><span id="rv-pts-num">+0</span> pts</div>
+    <button class="btn btn-yellow" id="rv-next-btn" style="width:100%" onclick="nextQuestion()">
+      Question suivante →
+    </button>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const ROOM       = sessionStorage.getItem('roomCode') || '';
+const MY_ID      = sessionStorage.getItem('myPlayerId') || '';
+const GAME_DATA  = JSON.parse(sessionStorage.getItem('gameData') || '{}');
+const LETTERS    = ['A','B','C','D'];
+
+if (!ROOM) { location.href = '/'; }
+
+let scores       = {};
+let gamePlayers  = GAME_DATA.players || [];
+let totalQ       = GAME_DATA.totalQuestions || 10;
+let timerMax     = GAME_DATA.timer || 20;
+let currentIdx   = 0;
+let myAnswer     = null;  // playerId I chose
+let answered     = false;
+let isHost       = false;
+let currentQ     = null;
+
+// Init score chips
+gamePlayers.forEach(p => { scores[p.id] = 0; });
+document.getElementById('q-tot').textContent = totalQ;
+
+// ── Waveform bars ──
+const wf = document.getElementById('waveform');
+for (let i=0;i<12;i++) { const d=document.createElement('div'); d.className='wb'; wf.appendChild(d); }
+
+// ── Socket ──
+const socket = io();
+
+socket.on('connect', () => {
+  // Re-join room for events (player already in room server-side)
+  socket.emit('join-room', {
+    roomCode:   ROOM,
+    sessionId:  MY_ID,
+    playerName: sessionStorage.getItem('playerName') || 'Joueur',
+  });
+});
+
+socket.on('joined', ({ playerId, isHost: iH }) => {
+  isHost = iH;
+});
+
+socket.on('question', q => {
+  currentQ   = q;
+  currentIdx = q.index;
+  answered   = false;
+  myAnswer   = null;
+  loadQuestion(q);
+});
+
+socket.on('tick', ({ t }) => {
+  updateTimer(t);
+});
+
+socket.on('answer-ack', ({ correct, pts, correctPlayerId }) => {
+  // Only shown to me
+  answered = true;
+  if (correct) {
+    scores[MY_ID] = (scores[MY_ID]||0) + pts;
+    bumpChip(MY_ID);
+  }
+  markAnswers(correctPlayerId, myAnswer);
+});
+
+socket.on('answer-count', ({ answered: n, total }) => {
+  document.getElementById('answered-info').textContent = `${n}/${total} joueurs ont répondu`;
+});
+
+socket.on('reveal', data => {
+  stopAudio();
+  if (!answered) {
+    markAnswers(data.ownerId, null);
+  }
+  // Update all scores
+  scores = { ...scores, ...data.scores };
+  renderScoreChips();
+  setTimeout(() => showReveal(data), 400);
+});
+
+socket.on('game-over', ({ rankings }) => {
+  document.getElementById('modal').classList.remove('open');
+  renderResults(rankings);
+  setTimeout(() => {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('s-results').classList.add('active');
+  }, 300);
+});
+
+socket.on('error', ({ message }) => toast('⚠️ ' + message));
+
+// ══════════════════════════════════════
+// QUESTION RENDER
+// ══════════════════════════════════════
+function loadQuestion(q) {
+  // Progress
+  const pct = (q.index / totalQ * 100);
+  document.getElementById('q-pfill').style.width = pct+'%';
+  document.getElementById('q-curr').textContent  = q.index + 1;
+
+  // Vinyl + waveform
+  document.getElementById('vinyl').classList.remove('stopped');
+  document.getElementById('waveform').classList.remove('quiet');
+
+  // Hide song info
+  document.getElementById('song-info').classList.remove('show');
+  document.getElementById('answered-info').textContent = '';
+
+  // Audio
+  playPreview(q.previewUrl);
+
+  // Answer buttons
+  const grid = document.getElementById('ans-grid');
+  grid.innerHTML = '';
+  q.options.forEach((player, i) => {
+    const plLabel = player.platform === 'spotify' ? '🟢 Spotify' : '🟣 Deezer';
+    const btn = document.createElement('button');
+    btn.className = 'ans-btn';
+    btn.id = 'ab-' + player.id;
+    btn.innerHTML = `
+      <div class="ans-key">${LETTERS[i]}</div>
+      <div class="ans-avi">${player.emoji||'🎵'}</div>
+      <div class="ans-body">
+        <div class="ans-name">${player.name}</div>
+        <div class="ans-sub">${plLabel}</div>
+      </div>`;
+    btn.onclick = () => submitAnswer(player.id);
+    grid.appendChild(btn);
+  });
+
+  // Timer arc reset
+  const arc = document.getElementById('tc-fg');
+  arc.style.stroke = 'var(--y)';
+  arc.style.strokeDashoffset = '0';
+  document.getElementById('t-num').textContent = timerMax;
+
+  // Score chips
+  renderScoreChips();
+}
+
+// ══════════════════════════════════════
+// AUDIO
+// ══════════════════════════════════════
+const audioEl = document.getElementById('audio-el');
+
+function playPreview(url) {
+  document.getElementById('no-preview').style.display = 'none';
+  if (!url) {
+    document.getElementById('no-preview').style.display = 'block';
+    return;
+  }
+  audioEl.src = url;
+  audioEl.volume = 0.7;
+  audioEl.play().catch(() => {
+    // Autoplay blocked — show play button fallback
+    document.getElementById('no-preview').textContent = '▶ Clique pour lancer la musique';
+    document.getElementById('no-preview').style.display = 'block';
+    document.getElementById('no-preview').style.cursor = 'pointer';
+    document.getElementById('no-preview').onclick = () => audioEl.play();
+  });
+}
+
+function stopAudio() {
+  audioEl.pause();
+  document.getElementById('vinyl').classList.add('stopped');
+  document.getElementById('waveform').classList.add('quiet');
+}
+
+// ══════════════════════════════════════
+// TIMER
+// ══════════════════════════════════════
+function updateTimer(t) {
+  const CIRC = 113.1;
+  const arc  = document.getElementById('tc-fg');
+  document.getElementById('t-num').textContent = t;
+  arc.style.strokeDashoffset = ((timerMax - t) / timerMax * CIRC);
+  if (t <= 5)       arc.style.stroke = 'var(--r)';
+  else if (t <= 10) arc.style.stroke = '#f59042';
+}
+
+// ══════════════════════════════════════
+// ANSWER
+// ══════════════════════════════════════
+function submitAnswer(playerId) {
+  if (answered) return;
+  answered  = true;
+  myAnswer  = playerId;
+  document.querySelectorAll('.ans-btn').forEach(b => b.disabled = true);
+  socket.emit('submit-answer', { roomCode: ROOM, answeredPlayerId: playerId });
+}
+
+function markAnswers(correctId, chosenId) {
+  document.querySelectorAll('.ans-btn').forEach(b => b.disabled = true);
+  document.querySelectorAll('.ans-btn').forEach(btn => {
+    const id = btn.id.replace('ab-','');
+    if (id === correctId) btn.classList.add('correct');
+    else if (chosenId && id === chosenId) btn.classList.add('wrong');
+  });
+  if (currentQ) {
+    document.getElementById('song-title').textContent  = currentQ.title;
+    document.getElementById('song-artist').textContent = currentQ.artist;
+    document.getElementById('song-info').classList.add('show');
+  }
+}
+
+// ══════════════════════════════════════
+// REVEAL MODAL
+// ══════════════════════════════════════
+function showReveal(data) {
+  const myAns  = data.answers?.[MY_ID];
+  const correct = myAns?.correct;
+  const pts     = myAns?.pts || 0;
+  const isLast  = data.isLast;
+
+  if (correct === undefined) {
+    document.getElementById('rv-icon').textContent    = '⏰';
+    document.getElementById('rv-verdict').textContent = 'TEMPS ÉCOULÉ !';
+    document.getElementById('rv-verdict').className   = 'rv-verdict timeout';
+  } else if (correct) {
+    document.getElementById('rv-icon').textContent    = '🎉';
+    document.getElementById('rv-verdict').textContent = 'BONNE RÉPONSE !';
+    document.getElementById('rv-verdict').className   = 'rv-verdict ok';
+  } else {
+    document.getElementById('rv-icon').textContent    = '💀';
+    document.getElementById('rv-verdict').textContent = 'RATÉ !';
+    document.getElementById('rv-verdict').className   = 'rv-verdict bad';
+  }
+
+  document.getElementById('rv-song-title').textContent  = `"${currentQ?.title||''}"`;
+  document.getElementById('rv-song-artist').textContent = currentQ?.artist || '';
+  document.getElementById('rv-avi').textContent          = data.ownerEmoji;
+  document.getElementById('rv-owner-name').textContent  = data.ownerName;
+  document.getElementById('rv-pts-num').textContent     = pts > 0 ? `+${pts}` : '+0';
+  document.getElementById('rv-pts').style.opacity       = pts > 0 ? '1' : '0.35';
+
+  const nextBtn = document.getElementById('rv-next-btn');
+  if (isHost) {
+    nextBtn.style.display = '';
+    nextBtn.textContent   = isLast ? 'Voir les résultats →' : 'Question suivante →';
+  } else {
+    nextBtn.style.display  = 'none';
+    // Show waiting message instead
+    nextBtn.insertAdjacentHTML('afterend', '<p id="wait-msg" style="color:var(--muted);font-size:13px;margin-top:12px">En attente de l\'hôte…</p>');
+  }
+
+  document.getElementById('modal').classList.add('open');
+}
+
+function nextQuestion() {
+  document.getElementById('modal').classList.remove('open');
+  const waitMsg = document.getElementById('wait-msg');
+  if (waitMsg) waitMsg.remove();
+  socket.emit('next-question', { roomCode: ROOM });
+}
+
+// ══════════════════════════════════════
+// SCORE CHIPS
+// ══════════════════════════════════════
+function renderScoreChips() {
+  const wrap = document.getElementById('score-chips');
+  wrap.innerHTML = '';
+  gamePlayers.forEach(p => {
+    const chip = document.createElement('div');
+    chip.className = 'sc-chip' + (p.id === MY_ID ? ' me' : '');
+    chip.id = 'chip-' + p.id;
+    chip.innerHTML = `<span>${p.emoji||'🎵'}</span><span>${p.id===MY_ID?'<b>Moi</b>':p.name.split(' ')[0]}</span><span class="sc-pts">${scores[p.id]||0}</span>`;
+    wrap.appendChild(chip);
+  });
+}
+
+function bumpChip(id) {
+  const el = document.getElementById('chip-'+id);
+  if (!el) return;
+  el.classList.remove('bump');
+  void el.offsetWidth;
+  el.classList.add('bump');
+}
+
+// ══════════════════════════════════════
+// RESULTS
+// ══════════════════════════════════════
+function renderResults(rankings) {
+  const winner = rankings[0];
+  const isMe   = winner?.id === MY_ID;
+  document.getElementById('res-winner').innerHTML =
+    winner ? `🏆 <b>${isMe ? 'Tu gagnes' : winner.name+' gagne'}</b> avec ${winner.score} points !` : '';
+
+  // Podium
+  const pOrder  = [rankings[1], rankings[0], rankings[2]].filter(Boolean);
+  const pClass  = ['pd-2','pd-1','pd-3'];
+  const pRank   = ['2','1','3'];
+  document.getElementById('podium').innerHTML = pOrder.map((p,i) => `
+    <div class="pd-col ${pClass[i]}">
+      <div class="pd-avi">${p.emoji||'🎵'}</div>
+      <div class="pd-name">${p.name}</div>
+      <div class="pd-pts">${p.score} pts</div>
+      <div class="pd-block">${pRank[i]}</div>
+    </div>`).join('');
+
+  // Full scoreboard
+  document.getElementById('scoreboard').innerHTML =
+    `<div class="label" style="margin-bottom:16px">Classement final</div>` +
+    rankings.map((p,i) => `
+      <div class="sb-row">
+        <div class="sb-rank ${i===0?'gold':''}">${i+1}</div>
+        <div class="sb-avi">${p.emoji||'🎵'}</div>
+        <div class="sb-name">${p.name}${p.id===MY_ID?'<span style="color:var(--muted);font-size:11px;margin-left:6px">(moi)</span>':''}</div>
+        <span class="pill ${p.platform==='spotify'?'pill-spotify':'pill-deezer'}">${p.platform||''}</span>
+        <div class="sb-pts">${p.score}</div>
+      </div>`).join('');
+}
+
+function backToLobby() {
+  location.href = `/lobby.html?room=${ROOM}`;
+}
+
+// ── Toast ──
+let _t;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(_t); _t = setTimeout(() => el.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>

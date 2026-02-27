@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhosTune — Quiz Musical</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'><text y='32' font-size='32'>🎵</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Syne+Mono&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="orbs"><div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div></div>
+<div id="toast"></div>
+
+<!-- HOME -->
+<div class="screen active" id="s-home">
+  <div class="home-logo">
+    <div class="logo-mark">WHOSE<br>TUNE?</div>
+    <div class="logo-eyebrow">Quiz Musical · Multijoueur</div>
+  </div>
+  <div class="home-cta">
+    <button class="btn btn-yellow btn-lg" onclick="showCreate()">🎮 Créer une partie</button>
+    <div class="home-divider">ou</div>
+    <button class="btn btn-ghost btn-lg" onclick="showJoin()">🔗 Rejoindre avec un code</button>
+  </div>
+  <div id="home-error" class="error-banner" style="display:none"></div>
+</div>
+
+<!-- CREATE -->
+<div class="screen" id="s-create">
+  <div class="form-card card">
+    <div class="back" onclick="showHome()">← Retour</div>
+    <h2>Nouvelle partie</h2>
+    <p class="sub">Crée la salle, puis connecte ta musique dans le lobby</p>
+
+    <div class="field">
+      <div class="label">Ton pseudo</div>
+      <input type="text" id="c-name" placeholder="Ton pseudo…" maxlength="18" autocomplete="off">
+    </div>
+
+    <div class="field">
+      <div class="label" style="margin-bottom:10px">Nombre de questions</div>
+      <div class="chips" id="chips-q">
+        <div class="chip" data-v="5"  onclick="pick(this,'chips-q')">5</div>
+        <div class="chip on" data-v="10" onclick="pick(this,'chips-q')">10</div>
+        <div class="chip" data-v="15" onclick="pick(this,'chips-q')">15</div>
+        <div class="chip" data-v="20" onclick="pick(this,'chips-q')">20</div>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="label" style="margin-bottom:10px">Secondes par question</div>
+      <div class="chips" id="chips-t">
+        <div class="chip" data-v="15" onclick="pick(this,'chips-t')">15s</div>
+        <div class="chip on" data-v="20" onclick="pick(this,'chips-t')">20s</div>
+        <div class="chip" data-v="30" onclick="pick(this,'chips-t')">30s</div>
+        <div class="chip" data-v="45" onclick="pick(this,'chips-t')">45s</div>
+      </div>
+    </div>
+
+    <button class="btn btn-yellow" id="create-btn" style="width:100%;margin-top:8px" onclick="createRoom()">
+      Créer la salle →
+    </button>
+  </div>
+</div>
+
+<!-- JOIN -->
+<div class="screen" id="s-join">
+  <div class="form-card card">
+    <div class="back" onclick="showHome()">← Retour</div>
+    <h2>Rejoindre</h2>
+    <p class="sub">Entre le code partagé par l'hôte</p>
+
+    <div class="field">
+      <div class="label">Ton pseudo</div>
+      <input type="text" id="j-name" placeholder="Ton pseudo…" maxlength="18" autocomplete="off">
+    </div>
+    <div class="field">
+      <div class="label">Code de la salle</div>
+      <input type="text" id="j-code" class="code-input" placeholder="WXYZ" maxlength="4"
+             oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'')">
+    </div>
+    <button class="btn btn-yellow" style="width:100%;margin-top:8px" onclick="joinRoom()">Rejoindre →</button>
+  </div>
+</div>
+
+<script>
+  // ── Read URL errors ──
+  const urlParams = new URLSearchParams(location.search);
+  if (urlParams.get('error')) {
+    const msgs = {
+      spotify_denied: '⚠️ Connexion Spotify annulée',
+      deezer_denied:  '⚠️ Connexion Deezer annulée',
+      spotify_error:  '⚠️ Erreur Spotify — réessaie',
+      deezer_error:   '⚠️ Erreur Deezer — réessaie',
+    };
+    const el = document.getElementById('home-error');
+    el.textContent = msgs[urlParams.get('error')] || '⚠️ Une erreur est survenue';
+    el.style.display = 'block';
+    document.getElementById('s-home').classList.add('active');
+  }
+
+  function showHome() {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('s-home').classList.add('active');
+  }
+  function showCreate() {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('s-create').classList.add('active');
+  }
+  function showJoin() {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('s-join').classList.add('active');
+  }
+
+  function pick(el, groupId) {
+    document.getElementById(groupId).querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
+    el.classList.add('on');
+  }
+
+  let _toast;
+  function toast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg; el.classList.add('show');
+    clearTimeout(_toast); _toast = setTimeout(() => el.classList.remove('show'), 2800);
+  }
+
+  async function createRoom() {
+    const name = document.getElementById('c-name').value.trim();
+    if (!name) { toast('⚠️ Entre un pseudo !'); return; }
+
+    const btn = document.getElementById('create-btn');
+    btn.disabled = true; btn.textContent = 'Création…';
+
+    const questions = +document.querySelector('#chips-q .chip.on').dataset.v;
+    const timer     = +document.querySelector('#chips-t .chip.on').dataset.v;
+
+    try {
+      const res  = await fetch('/api/room/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: { questions, timer } })
+      });
+      const data = await res.json();
+      // Store name for lobby
+      sessionStorage.setItem('playerName', name);
+      sessionStorage.setItem('isHost', '1');
+      location.href = `/lobby.html?room=${data.code}`;
+    } catch(err) {
+      toast('⚠️ Erreur serveur — réessaie');
+      btn.disabled = false; btn.textContent = 'Créer la salle →';
+    }
+  }
+
+  function joinRoom() {
+    const name = document.getElementById('j-name').value.trim();
+    const code = document.getElementById('j-code').value.trim().toUpperCase();
+    if (!name)       { toast('⚠️ Entre un pseudo !'); return; }
+    if (code.length < 4) { toast('⚠️ Code invalide (4 lettres)'); return; }
+    sessionStorage.setItem('playerName', name);
+    sessionStorage.removeItem('isHost');
+    location.href = `/lobby.html?room=${code}`;
+  }
+</script>
+</body>
+</html>
