@@ -107,12 +107,22 @@ if (!ROOM) { location.href = '/'; }
 // ── Socket ──
 const socket = io();
 
-socket.on('connect', () => {
+socket.on('connect', async () => {
+  // Try to recover session platform info
+  if (SID) {
+    try {
+      const r = await fetch('/api/session/recover?sid=' + SID);
+      const data = await r.json();
+      if (data.ok && data.platform) {
+        setTimeout(() => showConnectedBadge(data.platform), 800);
+      }
+    } catch(e) {}
+  }
   socket.emit('join-room', {
     roomCode:    ROOM,
     sessionId:   SID || socket.id,
     playerName:  PLAYER_NAME,
-    playerEmoji: null // server picks from session
+    playerEmoji: null
   });
 });
 

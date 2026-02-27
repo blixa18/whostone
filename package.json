@@ -1,7 +1,7 @@
 {
   "name": "whostone",
   "version": "1.0.0",
-  "description": "Quiz musical multijoueur — Spotify & Deezer",
+  "description": "Quiz musical multijoueur \u2014 Spotify & Deezer",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -12,7 +12,8 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-session": "^1.18.0",
-    "socket.io": "^4.7.5"
+    "socket.io": "^4.7.5",
+    "cookie-parser": "^1.4.6"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"
