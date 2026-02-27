@@ -78,7 +78,7 @@
     <div class="field">
       <div class="label">Code de la salle</div>
       <input type="text" id="j-code" class="code-input" placeholder="WXYZ" maxlength="4"
-             oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'')">
+             oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')">
     </div>
     <button class="btn btn-yellow" style="width:100%;margin-top:8px" onclick="joinRoom()">Rejoindre →</button>
   </div>
